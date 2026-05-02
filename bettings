@@ -1,0 +1,63 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+from scipy.stats import poisson
+
+st.title("⚽ Pro Betting Tool")
+
+st.write("Lataa CSV jossa: match, home_xg, away_xg, odds_home, odds_draw, odds_away")
+
+uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+
+def match_prob(home_lambda, away_lambda):
+    home_win = 0
+    draw = 0
+    away_win = 0
+
+    for i in range(6):
+        for j in range(6):
+            p = poisson.pmf(i, home_lambda) * poisson.pmf(j, away_lambda)
+            if i > j:
+                home_win += p
+            elif i == j:
+                draw += p
+            else:
+                away_win += p
+
+    return home_win, draw, away_win
+
+def ev(prob, odds):
+    return prob * odds - 1
+
+def kelly(prob, odds):
+    b = odds - 1
+    q = 1 - prob
+    return (b*prob - q) / b
+
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+
+    results = []
+
+    for _, row in df.iterrows():
+        home_lambda = row["home_xg"] * 1.1
+        away_lambda = row["away_xg"]
+
+        home, draw, away = match_prob(home_lambda, away_lambda)
+
+        ev_home = ev(home, row["odds_home"])
+        kelly_home = kelly(home, row["odds_home"])
+
+        if ev_home > 0.05:
+            results.append({
+                "Match": row["match"],
+                "Bet": "HOME",
+                "EV": round(ev_home,3),
+                "Kelly %": round(kelly_home,3)
+            })
+
+    if results:
+        st.success("Value bets löytyi!")
+        st.dataframe(pd.DataFrame(results))
+    else:
+        st.warning("Ei value bettejä tällä datalla")
